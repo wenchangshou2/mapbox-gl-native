@@ -26,6 +26,12 @@ public:
     StyleProperty getProperty(const std::string& name) const final;
     Value serialize() const final;
 
+    // Layout properties
+
+    static PropertyValue<float> getDefaultCircleSortKey();
+    const PropertyValue<float>& getCircleSortKey() const;
+    void setCircleSortKey(const PropertyValue<float>&);
+
     // Paint properties
 
     static PropertyValue<float> getDefaultCircleBlur();
