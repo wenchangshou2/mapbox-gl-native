@@ -89,7 +89,7 @@ void RenderCircleLayer::render(PaintParameters& parameters) {
         return;
     }
 
-    const bool sortFeaturesByKey = !impl(baseImpl).layout.get<CircleSortKey>().isUndefined();
+    const bool sortFeaturesByKey = !impl_cast(baseImpl).layout.get<CircleSortKey>().isUndefined();
     std::multiset<RenderableSegment> renderableSegments{};
 
     for (const RenderTile& tile : *renderTiles) {

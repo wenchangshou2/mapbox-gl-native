@@ -68,11 +68,12 @@ public:
 
     bool hasDependencies() const override { return hasPattern; }
 
-    void createBucket(const ImagePositions&,
+    virtual void createBucket(const ImagePositions&,
                       std::unique_ptr<FeatureIndex>& featureIndex,
                       std::unordered_map<std::string, LayerRenderData>& renderData,
                       const bool,
-                      const bool) override {
+                      const bool,
+                      const CanonicalTileID& canonical) override {
         auto bucket = std::make_shared<CircleBucket>(layerPropertiesMap, mode, zoom);
 
         for (auto& circleFeature : features) {
@@ -80,7 +81,7 @@ public:
             std::unique_ptr<GeometryTileFeature> feature = std::move(circleFeature.feature);
             const GeometryCollection& geometries = feature->getGeometries();
 
-            addCircle(*bucket, *feature, geometries, i, circleFeature.sortKey);
+            addCircle(*bucket, *feature, geometries, i, circleFeature.sortKey, canonical);
             featureIndex->insert(geometries, i, sourceLayerID, bucketLeaderID);
         }
         if (bucket->hasData()) {
@@ -95,7 +96,8 @@ private:
                    const GeometryTileFeature& feature,
                    const GeometryCollection& geometry,
                    std::size_t featureIndex,
-                   float sortKey) {
+                   float sortKey,
+                   const CanonicalTileID& canonical) {
         constexpr const uint16_t vertexLength = 4;
 
         auto& segments = bucket.segments;
@@ -148,7 +150,7 @@ private:
         }
 
         for (auto& pair : bucket.paintPropertyBinders) {
-            pair.second.populateVertexVectors(feature, vertices.elements(), featureIndex, {}, {});
+            pair.second.populateVertexVectors(feature, vertices.elements(), featureIndex, {}, {}, canonical);
         }
     }
 
