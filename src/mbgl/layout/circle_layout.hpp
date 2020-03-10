@@ -69,11 +69,11 @@ public:
     bool hasDependencies() const override { return hasPattern; }
 
     virtual void createBucket(const ImagePositions&,
-                      std::unique_ptr<FeatureIndex>& featureIndex,
-                      std::unordered_map<std::string, LayerRenderData>& renderData,
-                      const bool,
-                      const bool,
-                      const CanonicalTileID& canonical) override {
+                              std::unique_ptr<FeatureIndex>& featureIndex,
+                              std::unordered_map<std::string, LayerRenderData>& renderData,
+                              const bool,
+                              const bool,
+                              const CanonicalTileID& canonical) override {
         auto bucket = std::make_shared<CircleBucket>(layerPropertiesMap, mode, zoom);
 
         for (auto& circleFeature : features) {
