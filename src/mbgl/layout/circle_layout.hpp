@@ -49,7 +49,8 @@ public:
         for (size_t i = 0; i < featureCount; ++i) {
             auto feature = sourceLayer->getFeature(i);
             if (!leaderLayerProperties->layerImpl().filter(
-                    style::expression::EvaluationContext{this->zoom, feature.get()}))
+                style::expression::EvaluationContext(this->zoom, feature.get())
+                    .withCanonicalTileID(&parameters.tileID.canonical)))
                 continue;
 
             if (unevaluatedLayout.get<style::CircleSortKey>().isUndefined()) {
