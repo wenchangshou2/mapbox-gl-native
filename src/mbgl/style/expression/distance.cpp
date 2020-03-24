@@ -1,8 +1,8 @@
 #include <mbgl/style/expression/distance.hpp>
 
+#include <mapbox/cheap_ruler.hpp>
 #include <mapbox/geojson.hpp>
 #include <mapbox/geometry.hpp>
-#include <mapbox/cheap_ruler.hpp>
 
 #include <mbgl/style/conversion/json.hpp>
 #include <mbgl/tile/geometry_tile_data.hpp>
@@ -12,96 +12,102 @@
 
 #include <rapidjson/document.h>
 
+#include <tuple>
+
 namespace mbgl {
 namespace {
-//
-////Returns the distance between a point P on a segment AB.
-//double distanceToLineSegment(const mapbox::geometry::point<double>& p, const mapbox::geometry::point<double>& a,const mapbox::geometry::point<double>& b) {
-//    mapbox::geometry::point<double> vectorAB{(b.x - a.x), (b.y - a.y)};
-//    mapbox::geometry::point<double> vectorAP{(p.x - a.x), (p.y - a.y)};
-//    const auto dotProduct = [](const mapbox::geometry::point<double>& v,const mapbox::geometry::point<double>& w) {
-//        return v.x * w.x + v.y * w.y;
-//    };
-//    
-//    mapbox::cheap_ruler::CheapRuler ruler(p.y, mapbox::cheap_ruler::CheapRuler::Unit::Meters);
-//    // dotProduct equals to |vectorAB| * |vectorAP| * cos();
-//    const double dot1 = dotProduct(vectorAB, vectorAP);
-//    if (dot1 < 0) return ruler.distance(p, a);
-//
-//    const double dot2 =  dotProduct(vectorAB, vectorAB);
-//    if (dot1 >= dot2) return ruler.distance(p, b);
-//
-//    const double ratio =  dot1 / dot2;
-//    const mapbox::geometry::point<double> pointOnAB = {(a.x + vectorAB.x * ratio), (a.y + vectorAB.y * ratio)};
-//    return ruler.distance(p, pointOnAB);
-//}
-//
-//double distanceToLineInMeters(const mapbox::geometry::point<double>& point, const mapbox::geometry::line_string<double>& line){
-//    double ret = std::numeric_limits<double>::infinity();
-//    for (size_t i = 0; i < line.size() - 1; ++i){
-//        ret = std::min(ret, distanceToLineSegment(point, line[i], line[i+1]));
-//    }
-//    return ret;
-//}
-//
-//double distanceToLinesInMeters(const mapbox::geometry::point<double>& point, const mapbox::geometry::multi_line_string<double>& lines){
-//    double ret = std::numeric_limits<double>::infinity();
-//    for (const auto& line: lines) {
-//        ret = std::min(ret, distanceToLineInMeters(point, line));
-//    }
-//    return ret;
-//}
 
-double calculateDistance(const mbgl::GeometryTileFeature& feature,
-                          const mbgl::CanonicalTileID& canonical,
-                          const Feature::geometry_type& geoSet) {
-    return convertGeometry(feature, canonical).match(
-        [&geoSet](const mapbox::geometry::point<double>& point) -> double {
-            mapbox::cheap_ruler::CheapRuler ruler(point.y, mapbox::cheap_ruler::CheapRuler::Unit::Meters);
-            return geoSet.match(
-             [&point, &ruler](const mapbox::geometry::point<double>& point2) {
-                return ruler.distance(point, point2);
-             },
-            [&point, &ruler](const mapbox::geometry::multi_point<double>& points) {
+double pointDitanceToGeometry(const mapbox::geometry::point<double>& point,
+                              const Feature::geometry_type& geoSet,
+                              mapbox::cheap_ruler::CheapRuler::Unit unit) {
+    mapbox::cheap_ruler::CheapRuler ruler(point.y, unit);
+    return geoSet.match([&point, &ruler](const mapbox::geometry::point<double>& p) { return ruler.distance(point, p); },
+                        [&point, &ruler](const mapbox::geometry::multi_point<double>& points) {
+                            double ret = std::numeric_limits<double>::infinity();
+                            for (size_t i = 0; i < points.size(); ++i) {
+                                ret = std::min(ret, ruler.distance(point, points[i]));
+                            }
+                            return ret;
+                        },
+                        [&point, &ruler](const mapbox::geometry::line_string<double>& line) {
+                            const auto nearestPoint = std::get<0>(ruler.pointOnLine(line, point));
+                            return ruler.distance(point, nearestPoint);
+                        },
+                        [&point, &ruler](const mapbox::geometry::multi_line_string<double>& lines) {
+                            double ret = std::numeric_limits<double>::infinity();
+                            for (const auto& line : lines) {
+                                const auto nearestPoint = std::get<0>(ruler.pointOnLine(line, point));
+                                ret = std::min(ret, ruler.distance(point, nearestPoint));
+                            }
+                            return ret;
+                        },
+                        [](const auto&) -> double { return -1.0; });
+}
+
+double calculateDistance(const GeometryTileFeature& feature,
+                         const CanonicalTileID& canonical,
+                         const Feature::geometry_type& geoSet,
+                         mapbox::cheap_ruler::CheapRuler::Unit unit) {
+    return convertGeometry(feature, canonical)
+        .match(
+            [&geoSet, &unit](const mapbox::geometry::point<double>& point) -> double {
+                return pointDitanceToGeometry(point, geoSet, unit);
+            },
+            [&geoSet, &unit](const mapbox::geometry::multi_point<double>& points) -> double {
                 double ret = std::numeric_limits<double>::infinity();
-                for (size_t i = 0; i < points.size() - 1; ++i){
-                    ret = std::min(ret, ruler.distance(point, points[i]));
+                for (const auto& p : points) {
+                    ret = std::min(ret, pointDitanceToGeometry(p, geoSet, unit));
                 }
                 return ret;
             },
-             [&point, &ruler](const mapbox::geometry::line_string<double>& line) {
-                   double ret = std::numeric_limits<double>::infinity();
-                   for (size_t i = 0; i < line.size() - 1; ++i){
-                       ret = std::min(ret, ruler.distanceToLineSegment(point, line[i], line[i+1]));
-                   }
-                   return ret;
-            },
-            [&point,&ruler](const mapbox::geometry::multi_line_string<double>& lines) {
-                   double ret = std::numeric_limits<double>::infinity();
-                   for (const auto& line: lines) {
-                       for (size_t i = 0; i < line.size() - 1; ++i){
-                         ret = std::min(ret, ruler.distanceToLineSegment(point, line[i], line[i+1]));
-                       }
-                   }
-                   return ret;
-            },
             [](const auto&) -> double { return -1.0; });
-        },
-        [](const auto&) -> double { return -1.0; });
 }
 
-optional<mbgl::GeoJSON> parseValue(const mbgl::style::conversion::Convertible& value_,
-                                         mbgl::style::expression::ParsingContext& ctx) {
-    if (isObject(value_)) {
-        mbgl::style::conversion::Error error;
-        auto geojson = toGeoJSON(value_, error);
-        if (geojson && error.message.empty()) {
-            return geojson;
-        }
-        ctx.error(error.message);
-    }
+struct Arguments {
+    Arguments(GeoJSON& geojson_, mapbox::cheap_ruler::CheapRuler::Unit unit_)
+        : geojson(std::move(geojson_)), unit(unit_) {}
 
-    ctx.error("'distance' expression requires valid geojson source that contains polygon geometry type.");
+    GeoJSON geojson;
+    mapbox::cheap_ruler::CheapRuler::Unit unit;
+};
+
+optional<Arguments> parseValue(const style::conversion::Convertible& value, style::expression::ParsingContext& ctx) {
+    if (isArray(value)) {
+        // object value, quoted with ["Distance", GeoJSONObj, units]
+        auto length = arrayLength(value);
+        if (length != 2 && length != 3) {
+            ctx.error("'distance' expression requires exactly one argument, but found " +
+                      util::toString(arrayLength(value) - 1) + " instead.");
+            return nullopt;
+        }
+
+        mapbox::cheap_ruler::CheapRuler::Unit unit = mapbox::cheap_ruler::CheapRuler::Unit::Meters;
+        if (arrayLength(value) == 3) {
+            auto input = toString(arrayMember(value, 2)).value_or("Meters");
+            if (input == "Meters" || input == "Metres") {
+                unit = mapbox::cheap_ruler::CheapRuler::Unit::Meters;
+            }
+            if (input == "Kilometers") {
+                unit = mapbox::cheap_ruler::CheapRuler::Unit::Kilometers;
+            }
+            if (input == "Miles") {
+                unit = mapbox::cheap_ruler::CheapRuler::Unit::Miles;
+            }
+            if (input == "Inches") {
+                unit = mapbox::cheap_ruler::CheapRuler::Unit::Inches;
+            }
+        }
+        const auto& argument1 = arrayMember(value, 1);
+        if (isObject(argument1)) {
+            style::conversion::Error error;
+            auto geojson = toGeoJSON(argument1, error);
+            if (geojson && error.message.empty()) {
+                return Arguments(*geojson, unit);
+            }
+            ctx.error(error.message);
+        }
+    }
+    ctx.error("'distance' expression needs to be an array with one/two arguments.");
     return nullopt;
 }
 
@@ -112,17 +118,17 @@ optional<Feature::geometry_type> getGeometry(const Feature& feature, mbgl::style
     }
     ctx.error("'distance' expression requires valid geojson source that contains Point/LineString geometry type.");
     return nullopt;
-
 }
 } // namespace
 
 namespace style {
 namespace expression {
 
-Distance::Distance(GeoJSON geojson, Feature::geometry_type geometries_)
+Distance::Distance(GeoJSON geojson, Feature::geometry_type geometries_, mapbox::cheap_ruler::CheapRuler::Unit unit_)
     : Expression(Kind::Distance, type::Number),
       geoJSONSource(std::move(geojson)),
-      geometries(std::move(geometries_)){}
+      geometries(std::move(geometries_)),
+      unit(unit_) {}
 
 Distance::~Distance() = default;
 
@@ -133,58 +139,51 @@ EvaluationResult Distance::evaluate(const EvaluationContext& params) const {
         return -1.0;
     }
     auto geometryType = params.feature->getType();
-    // Currently only support Point/Points distance to LineString
+    // Currently only support Point/Points distance to points or LineString
     if (geometryType == FeatureType::Point) {
-        auto distance = calculateDistance(*params.feature, *params.canonical, geometries);
+        auto distance = calculateDistance(*params.feature, *params.canonical, geometries, unit);
         return distance;
-    } 
-    mbgl::Log::Warning(mbgl::Event::General,
-                       "distance expression currently only support feature with Point geometry.");
+    }
+    mbgl::Log::Warning(mbgl::Event::General, "distance expression currently only support feature with Point geometry.");
 
     return -1.0;
 }
 
 ParseResult Distance::parse(const Convertible& value, ParsingContext& ctx) {
-    if (isArray(value)) {
-        // object value, quoted with ["Distance", value]
-        if (arrayLength(value) != 2) {
-            ctx.error("'distance' expression requires exactly one argument, but found " +
-                      util::toString(arrayLength(value) - 1) + " instead.");
-            return ParseResult();
-        }
-
-        auto parsedValue = parseValue(arrayMember(value, 1), ctx);
-        if (!parsedValue) {
-            return ParseResult();
-        }
-
-        return parsedValue->match(
-            [&parsedValue, &ctx](const mapbox::geometry::geometry<double>& geometrySet) {
-                if (auto ret = getGeometry(mbgl::Feature(geometrySet), ctx)) {
-                    return  ParseResult(std::make_unique<Distance>(*parsedValue, std::move(*ret)));
-                }
-                return ParseResult();
-            },
-            [&parsedValue, &ctx](const mapbox::feature::feature<double>& feature) {
-                if (auto ret = getGeometry(mbgl::Feature(feature), ctx)) {
-                    return ParseResult(std::make_unique<Distance>(*parsedValue, std::move(*ret)));
-                }
-                return ParseResult();
-            },
-            [&parsedValue, &ctx](const mapbox::feature::feature_collection<double>& features) {
-                for (const auto& feature : features) {
-                    if (auto ret = getGeometry(mbgl::Feature(feature), ctx)) {
-                        return ParseResult(std::make_unique<Distance>(*parsedValue, std::move(*ret)));
-                    }
-                }
-                return ParseResult();
-            },
-            [&ctx](const auto&) {
-                ctx.error("'distance' expression requires valid geojson that contains LineString/Point geometries.");
-                return ParseResult();
-            });
+    auto parsedValue = parseValue(value, ctx);
+    if (!parsedValue) {
+        return ParseResult();
     }
-    ctx.error("'distance' expression needs to be an array with exactly one argument.");
+
+    return parsedValue->geojson.match(
+        [&parsedValue, &ctx](const mapbox::geometry::geometry<double>& geometrySet) {
+            if (auto ret = getGeometry(mbgl::Feature(geometrySet), ctx)) {
+                return ParseResult(
+                    std::make_unique<Distance>(parsedValue->geojson, std::move(*ret), parsedValue->unit));
+            }
+            return ParseResult();
+        },
+        [&parsedValue, &ctx](const mapbox::feature::feature<double>& feature) {
+            if (auto ret = getGeometry(mbgl::Feature(feature), ctx)) {
+                return ParseResult(
+                    std::make_unique<Distance>(parsedValue->geojson, std::move(*ret), parsedValue->unit));
+            }
+            return ParseResult();
+        },
+        [&parsedValue, &ctx](const mapbox::feature::feature_collection<double>& features) {
+            for (const auto& feature : features) {
+                if (auto ret = getGeometry(mbgl::Feature(feature), ctx)) {
+                    return ParseResult(
+                        std::make_unique<Distance>(parsedValue->geojson, std::move(*ret), parsedValue->unit));
+                }
+            }
+            return ParseResult();
+        },
+        [&ctx](const auto&) {
+            ctx.error("'distance' expression requires valid geojson that contains LineString/Point geometries.");
+            return ParseResult();
+        });
+
     return ParseResult();
 }
 
@@ -232,13 +231,13 @@ mbgl::Value Distance::serialize() const {
 bool Distance::operator==(const Expression& e) const {
     if (e.getKind() == Kind::Distance) {
         auto rhs = static_cast<const Distance*>(&e);
-        return geoJSONSource == rhs->geoJSONSource && geometries == rhs->geometries;
+        return geoJSONSource == rhs->geoJSONSource && geometries == rhs->geometries && unit == rhs->unit;
     }
     return false;
 }
 
 std::vector<optional<Value>> Distance::possibleOutputs() const {
-    return { nullopt };
+    return {nullopt};
 }
 
 std::string Distance::getOperator() const {

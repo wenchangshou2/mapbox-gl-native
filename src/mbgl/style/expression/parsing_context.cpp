@@ -12,6 +12,7 @@
 #include <mbgl/style/expression/coercion.hpp>
 #include <mbgl/style/expression/comparison.hpp>
 #include <mbgl/style/expression/compound_expression.hpp>
+#include <mbgl/style/expression/distance.hpp>
 #include <mbgl/style/expression/expression.hpp>
 #include <mbgl/style/expression/format_expression.hpp>
 #include <mbgl/style/expression/image_expression.hpp>
@@ -24,7 +25,6 @@
 #include <mbgl/style/expression/number_format.hpp>
 #include <mbgl/style/expression/step.hpp>
 #include <mbgl/style/expression/within.hpp>
-#include <mbgl/style/expression/distance.hpp>
 
 #include <mbgl/style/expression/find_zoom_curve.hpp>
 #include <mbgl/style/expression/dsl.hpp>

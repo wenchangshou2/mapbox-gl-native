@@ -954,7 +954,6 @@ include(${PROJECT_SOURCE_DIR}/vendor/protozero.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/unique_resource.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/vector-tile.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/wagyu.cmake)
-include(${PROJECT_SOURCE_DIR}/vendor/cheap-ruler-cpp.cmake)
 
 target_link_libraries(
     mbgl-core
@@ -963,6 +962,7 @@ target_link_libraries(
         Mapbox::Base::supercluster.hpp
         Mapbox::Base::shelf-pack-cpp
         Mapbox::Base::geojson-vt-cpp
+        Mapbox::Base::cheap-ruler-cpp
         mbgl-compiler-options
         mbgl-vendor-boost
         mbgl-vendor-csscolorparser
@@ -974,7 +974,6 @@ target_link_libraries(
         mbgl-vendor-unique_resource
         mbgl-vendor-vector-tile
         mbgl-vendor-wagyu
-        mbgl-vendor-cheap-ruler-cpp
     PUBLIC
         Mapbox::Base
         Mapbox::Base::Extras::expected-lite
@@ -1008,7 +1007,7 @@ if(MBGL_WITH_CORE_ONLY)
     return()
 endif()
 
-#include(${PROJECT_SOURCE_DIR}/scripts/license.cmake)
+# include(${PROJECT_SOURCE_DIR}/scripts/license.cmake)
 
 if(MBGL_WITH_QT)
     include(${PROJECT_SOURCE_DIR}/platform/qt/qt.cmake)
