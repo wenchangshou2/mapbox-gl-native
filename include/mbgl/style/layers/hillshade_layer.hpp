@@ -15,7 +15,7 @@ namespace style {
 
 class TransitionOptions;
 
-class HillshadeLayer : public Layer {
+class HillshadeLayer final : public Layer {
 public:
     HillshadeLayer(const std::string& layerID, const std::string& sourceID);
     ~HillshadeLayer() final;
