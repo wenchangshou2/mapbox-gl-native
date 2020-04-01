@@ -91,6 +91,7 @@ private:
     void addAnimatedAnnotation();
     void updateAnimatedAnnotations();
     void toggleCustomSource();
+    void showFlybyDemo(double dt);
 
     void cycleDebugOptions();
     void clearAnnotations();
@@ -113,6 +114,7 @@ private:
 
     std::string testDirectory = ".";
 
+    double flyByDemoPhase = -1;
     bool fullscreen = false;
     const bool benchmark = false;
     bool tracking = false;
