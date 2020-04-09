@@ -26,9 +26,8 @@ bool lineStringWithinPolygon(const LineString<int64_t>& lineString, const Polygo
 
 bool lineStringWithinPolygons(const LineString<int64_t>& line, const MultiPolygon<int64_t>& polygons);
 
-
-//template <typename T>
-//struct GeoBBox {
+// template <typename T>
+// struct GeoBBox {
 //    using type = T;
 //    using BBox = std::array<type, 4>;
 //
@@ -40,7 +39,10 @@ bool lineStringWithinPolygons(const LineString<int64_t>& line, const MultiPolygo
 template <typename T0>
 struct GeometryUtil {
     using type = T0;
-    bool segmentIntersectSegment(const Point<type>& a, const Point<type>& b,  const Point<type>& c, const Point<type>& d) const;
+    bool segmentIntersectSegment(const Point<type>& a,
+                                 const Point<type>& b,
+                                 const Point<type>& c,
+                                 const Point<type>& d) const;
     bool rayCast(const Point<type>& p, const Point<type>& p1, const Point<type>& p2);
 
     // check if point p in on line segment with end points p1 and p2

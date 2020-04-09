@@ -6,66 +6,26 @@
 
 #include <mbgl/style/conversion/json.hpp>
 #include <mbgl/tile/geometry_tile_data.hpp>
+#include <mbgl/util/geometry_within.hpp>
 
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/string.hpp>
 
 #include <rapidjson/document.h>
 
-#include <tuple>
-
 namespace mbgl {
 namespace {
 
-// a, b are end points for line segment1, c and d are end points for line segment2
-bool lineIntersectLine(const Point<double>& a, const Point<double>& b, const Point<double>& c, const Point<double>& d) {
-    const auto perp = [](const Point<double>& v1, const Point<double>& v2) { return (v1.x * v2.y - v1.y * v2.x); };
-
-    // check if two segments are parallel or not
-    // precondition is end point a, b is inside polygon, if line a->b is
-    // parallel to polygon edge c->d, then a->b won't intersect with c->d
-    auto vectorP = Point<double>(b.x - a.x, b.y - a.y);
-    auto vectorQ = Point<double>(d.x - c.x, d.y - c.y);
-    if (perp(vectorQ, vectorP) == 0) return false;
-
-    // check if p1 and p2 are in different sides of line segment q1->q2
-    const auto twoSided =
-        [](const Point<double>& p1, const Point<double>& p2, const Point<double>& q1, const Point<double>& q2) {
-            double x1;
-            double y1;
-            double x2;
-            double y2;
-            double x3;
-            double y3;
-
-            // q1->p1 (x1, y1), q1->p2 (x2, y2), q1->q2 (x3, y3)
-            x1 = p1.x - q1.x;
-            y1 = p1.y - q1.y;
-            x2 = p2.x - q1.x;
-            y2 = p2.y - q1.y;
-            x3 = q2.x - q1.x;
-            y3 = q2.y - q1.y;
-            auto ret1 = (x1 * y3 - x3 * y1);
-            auto ret2 = (x2 * y3 - x3 * y2);
-            return ((ret1 > 0 && ret2 < 0) || (ret1 < 0 && ret2 > 0));
-        };
-
-    // If lines are intersecting with each other, the relative location should be:
-    // a and b lie in different sides of segment c->d
-    // c and d lie in different sides of segment a->b
-    return (twoSided(a, b, c, d) && twoSided(c, d, a, b));
-}
-
-double shortestDistanceToLine(const mapbox::geometry::point<double>& point,
-                              const mapbox::geometry::line_string<double>& line,
-                              mapbox::cheap_ruler::CheapRuler& ruler) {
+double pointToLineDistance(const mapbox::geometry::point<double>& point,
+                           const mapbox::geometry::line_string<double>& line,
+                           mapbox::cheap_ruler::CheapRuler& ruler) {
     const auto nearestPoint = std::get<0>(ruler.pointOnLine(line, point));
     return ruler.distance(point, nearestPoint);
 }
 
-double shortestDistanceToLines(const mapbox::geometry::point<double>& point,
-                               const mapbox::geometry::multi_line_string<double>& lines,
-                               mapbox::cheap_ruler::CheapRuler& ruler) {
+double pointToLinesDistance(const mapbox::geometry::point<double>& point,
+                            const mapbox::geometry::multi_line_string<double>& lines,
+                            mapbox::cheap_ruler::CheapRuler& ruler) {
     double dist = std::numeric_limits<double>::infinity();
     for (const auto& line : lines) {
         const auto nearestPoint = std::get<0>(ruler.pointOnLine(line, point));
@@ -76,9 +36,9 @@ double shortestDistanceToLines(const mapbox::geometry::point<double>& point,
     return dist;
 }
 
-double shortestDistanceToPoints(const mapbox::geometry::point<double>& point,
-                                const mapbox::geometry::multi_point<double>& points,
-                                mapbox::cheap_ruler::CheapRuler& ruler) {
+double pointToPointsDistance(const mapbox::geometry::point<double>& point,
+                             const mapbox::geometry::multi_point<double>& points,
+                             mapbox::cheap_ruler::CheapRuler& ruler) {
     double dist = std::numeric_limits<double>::infinity();
     for (size_t i = 0; i < points.size(); ++i) {
         auto tempDist = ruler.distance(point, points[i]);
@@ -88,9 +48,9 @@ double shortestDistanceToPoints(const mapbox::geometry::point<double>& point,
     return dist;
 }
 
-double shortestDistanceLineToLine(const mapbox::geometry::line_string<double>& line1,
-                                  const mapbox::geometry::line_string<double>& line2,
-                                  mapbox::cheap_ruler::CheapRuler& ruler) {
+double lineToLineDistance(const mapbox::geometry::line_string<double>& line1,
+                          const mapbox::geometry::line_string<double>& line2,
+                          mapbox::cheap_ruler::CheapRuler& ruler) {
     double dist = std::numeric_limits<double>::infinity();
     for (std::size_t i = 0; i < line1.size() - 1; ++i) {
         const auto& p1 = line1[i];
@@ -98,58 +58,67 @@ double shortestDistanceLineToLine(const mapbox::geometry::line_string<double>& l
         for (std::size_t j = 0; j < line2.size() - 1; ++j) {
             const auto& q1 = line2[j];
             const auto& q2 = line2[j + 1];
-            if (lineIntersectLine(p1, p2, q1, q2)) return 0.;
-            dist = std::min(dist, shortestDistanceToLine(p1, mapbox::geometry::line_string<double>{q1, q2}, ruler));
-            dist = std::min(dist, shortestDistanceToLine(p2, mapbox::geometry::line_string<double>{q1, q2}, ruler));
-            dist = std::min(dist, shortestDistanceToLine(q1, mapbox::geometry::line_string<double>{p1, p2}, ruler));
-            dist = std::min(dist, shortestDistanceToLine(q1, mapbox::geometry::line_string<double>{p1, p2}, ruler));
+
+            if (GeometryUtil<double>().segmentIntersectSegment(p1, p2, q1, q2)) return 0.;
+            dist = std::min(dist, pointToLineDistance(p1, mapbox::geometry::line_string<double>{q1, q2}, ruler));
+            dist = std::min(dist, pointToLineDistance(p2, mapbox::geometry::line_string<double>{q1, q2}, ruler));
+            dist = std::min(dist, pointToLineDistance(q1, mapbox::geometry::line_string<double>{p1, p2}, ruler));
+            dist = std::min(dist, pointToLineDistance(q1, mapbox::geometry::line_string<double>{p1, p2}, ruler));
         }
     }
     return dist;
 }
 
-double pointDistanceToGeometry(const mapbox::geometry::point<double>& point,
+double lineToLinesDistance(const mapbox::geometry::line_string<double>& line,
+                           const mapbox::geometry::multi_line_string<double>& lines,
+                           mapbox::cheap_ruler::CheapRuler& ruler) {
+    double dist = std::numeric_limits<double>::infinity();
+    for (const auto& l : lines) {
+        auto tempDist = lineToLineDistance(line, l, ruler);
+        if (tempDist == 0.) return 0.;
+        dist = std::min(dist, tempDist);
+    }
+    return dist;
+}
+
+double pointToGeometryDistance(const mapbox::geometry::point<double>& point,
                                const Feature::geometry_type& geoSet,
                                mapbox::cheap_ruler::CheapRuler::Unit unit) {
     mapbox::cheap_ruler::CheapRuler ruler(point.y, unit);
     return geoSet.match([&point, &ruler](const mapbox::geometry::point<double>& p) { return ruler.distance(point, p); },
                         [&point, &ruler](const mapbox::geometry::multi_point<double>& points) {
-                            return shortestDistanceToPoints(point, points, ruler);
+                            return pointToPointsDistance(point, points, ruler);
                         },
                         [&point, &ruler](const mapbox::geometry::line_string<double>& line) {
-                            return shortestDistanceToLine(point, line, ruler);
+                            return pointToLineDistance(point, line, ruler);
                         },
                         [&point, &ruler](const mapbox::geometry::multi_line_string<double>& lines) {
-                            return shortestDistanceToLines(point, lines, ruler);
+                            return pointToLinesDistance(point, lines, ruler);
                         },
                         [](const auto&) -> double { return std::numeric_limits<double>::infinity(); });
 }
 
-double lineDistanceToGeometry(const mapbox::geometry::line_string<double>& line,
+double lineToGeometryDistance(const mapbox::geometry::line_string<double>& line,
                               const Feature::geometry_type& geoSet,
                               mapbox::cheap_ruler::CheapRuler::Unit unit) {
     assert(!line.empty());
     mapbox::cheap_ruler::CheapRuler ruler(line.front().y, unit);
     return geoSet.match(
-        [&line, &ruler](const mapbox::geometry::point<double>& p) { return shortestDistanceToLine(p, line, ruler); },
+        [&line, &ruler](const mapbox::geometry::point<double>& p) { return pointToLineDistance(p, line, ruler); },
         [&line, &ruler](const mapbox::geometry::multi_point<double>& points) {
             double dist = std::numeric_limits<double>::infinity();
             for (size_t i = 0; i < points.size(); ++i) {
-                dist = std::min(dist, shortestDistanceToLine(points[i], line, ruler));
-            }
-            return dist;
-        },
-        [&line, &ruler](const mapbox::geometry::line_string<double>& line1) {
-            return shortestDistanceLineToLine(line, line1, ruler);
-        },
-        [&line, &ruler](const mapbox::geometry::multi_line_string<double>& lines) {
-            double dist = std::numeric_limits<double>::infinity();
-            for (const auto& l : lines) {
-                auto tempDist = shortestDistanceLineToLine(line, l, ruler);
+                auto tempDist = pointToLineDistance(points[i], line, ruler);
                 if (tempDist == 0.) return 0.;
                 dist = std::min(dist, tempDist);
             }
             return dist;
+        },
+        [&line, &ruler](const mapbox::geometry::line_string<double>& line1) {
+            return lineToLineDistance(line, line1, ruler);
+        },
+        [&line, &ruler](const mapbox::geometry::multi_line_string<double>& lines) {
+            return lineToLinesDistance(line, lines, ruler);
         },
         [](const auto&) -> double { return -1.0; });
 }
@@ -161,24 +130,24 @@ double calculateDistance(const GeometryTileFeature& feature,
     return convertGeometry(feature, canonical)
         .match(
             [&geoSet, &unit](const mapbox::geometry::point<double>& point) -> double {
-                return pointDistanceToGeometry(point, geoSet, unit);
+                return pointToGeometryDistance(point, geoSet, unit);
             },
             [&geoSet, &unit](const mapbox::geometry::multi_point<double>& points) -> double {
                 double ret = std::numeric_limits<double>::infinity();
                 for (const auto& p : points) {
-                    auto dist = pointDistanceToGeometry(p, geoSet, unit);
+                    auto dist = pointToGeometryDistance(p, geoSet, unit);
                     if (dist == 0.) return dist;
                     ret = std::min(ret, dist);
                 }
                 return ret;
             },
             [&geoSet, &unit](const mapbox::geometry::line_string<double>& line) -> double {
-                return lineDistanceToGeometry(line, geoSet, unit);
+                return lineToGeometryDistance(line, geoSet, unit);
             },
             [&geoSet, &unit](const mapbox::geometry::multi_line_string<double>& lines) -> double {
                 double ret = std::numeric_limits<double>::infinity();
                 for (const auto& line : lines) {
-                    auto dist = lineDistanceToGeometry(line, geoSet, unit);
+                    auto dist = lineToGeometryDistance(line, geoSet, unit);
                     if (dist == 0.) return dist;
                     ret = std::min(ret, dist);
                 }
@@ -263,13 +232,8 @@ EvaluationResult Distance::evaluate(const EvaluationContext& params) const {
         return EvaluationError{"distance expression requirs valid feature and canonical information."};
     }
     auto geometryType = params.feature->getType();
-    if (geometryType == FeatureType::Point) {
-        auto distance = calculateDistance(*params.feature, *params.canonical, geometries, unit);
-        return distance;
-    }
-    if (geometryType == FeatureType::LineString) {
-        auto distance = calculateDistance(*params.feature, *params.canonical, geometries, unit);
-        return distance;
+    if (geometryType == FeatureType::Point || geometryType == FeatureType::LineString) {
+        return calculateDistance(*params.feature, *params.canonical, geometries, unit);
     }
     return EvaluationError{"distance expression currently only supports feature with Point geometry."};
 }
