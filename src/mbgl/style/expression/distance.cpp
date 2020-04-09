@@ -250,8 +250,8 @@ double lineToLinesDistance(const mapbox::geometry::line_string<double>& line,
 }
 
 double lineToPolygonDistance(const mapbox::geometry::line_string<double>& line,
-                           const mapbox::geometry::polygon<double>& polygon,
-                           mapbox::cheap_ruler::CheapRuler& ruler) {
+                             const mapbox::geometry::polygon<double>& polygon,
+                             mapbox::cheap_ruler::CheapRuler& ruler) {
     double dist = std::numeric_limits<double>::infinity();
     for (const auto& l : polygon) {
         auto tempDist = lineToLineDistance(line, l, ruler);
