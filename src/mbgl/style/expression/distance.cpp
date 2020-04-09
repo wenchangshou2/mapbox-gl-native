@@ -345,7 +345,7 @@ double polygonToGeometryDistance(const mapbox::geometry::polygon<double>& polygo
         [&polygon, &ruler](const mapbox::geometry::multi_line_string<double>& lines) {
             double dist = std::numeric_limits<double>::infinity();
             for (const auto& line : lines) {
-                auto tempDist = lineToLinesDistance(line, polygon, ruler);
+                auto tempDist = lineToPolygonDistance(line, polygon, ruler);
                 if (tempDist == 0.) return 0.;
                 dist = std::min(dist, tempDist);
             }
