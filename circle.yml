@@ -566,6 +566,7 @@ jobs:
           command: |
             vendor/benchmark/tools/compare.py benchmarks metrics/benchmark/ios/results.json /tmp/tests/benchmark/results.json > /tmp/tests/benchmark/results_comparison.txt
             scripts/check_benchmark_results.sh /tmp/tests/benchmark/results_comparison.txt /tmp/tests/benchmark/results_comparison.html
+      - save
   android-benchmark-runner:
     executor: ubuntu-disco
     steps:
