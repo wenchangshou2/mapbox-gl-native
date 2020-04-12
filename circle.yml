@@ -564,8 +564,7 @@ jobs:
           name: Compare result to baseline
           when: always
           command: |
-            vendor/benchmark/tools/compare.py benchmarks metrics/benchmark/ios/results.json /tmp/tests/benchmark/results.json > /tmp/tests/benchmark/results_comparison.txt
-            scripts/check_benchmark_results.sh /tmp/tests/benchmark/results_comparison.txt /tmp/tests/benchmark/results_comparison.html
+            scripts/check_benchmark_results.sh metrics/benchmark/ios/results.json /tmp/tests/benchmark/results.json /tmp/tests/benchmark/results_comparison.txt /tmp/tests/benchmark/results_comparison.html
       - save
   android-benchmark-runner:
     executor: ubuntu-disco
@@ -604,8 +603,7 @@ jobs:
           name: Compare result to baseline
           when: always
           command: |
-            vendor/benchmark/tools/compare.py benchmarks metrics/benchmark/android/results.json /tmp/tests/benchmark/results.json > /tmp/tests/benchmark/results_comparison.txt
-            scripts/check_benchmark_results.sh /tmp/tests/benchmark/results_comparison.txt /tmp/tests/benchmark/results_comparison.html
+            scripts/check_benchmark_results.sh metrics/benchmark/android/results.json /tmp/tests/benchmark/results.json /tmp/tests/benchmark/results_comparison.txt /tmp/tests/benchmark/results_comparison.html
       - save
   android-api-breakage:
     executor: ubuntu-disco

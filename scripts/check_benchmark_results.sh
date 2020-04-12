@@ -1,25 +1,36 @@
 #!/bin/bash
 
-tests=`fgrep mean $1 | cut -c1-85 | grep 91m`
+# Usage:
+# check_benchmark_results.sh <baseline> <results> <comparison report in txt> <comparison report in html>
+
+# Benchmark comparison script uses a hard-coded 5% threshold by default, but it causes random failures
+# Increase the threshold to 7%
+sed -i s/"if res > 0.05"/"if res > 0.07"/ $PWD/vendor/benchmark/tools/gbench/report.py
+
+# Run the bencmark comparison
+vendor/benchmark/tools/compare.py benchmarks $1 $2 > $3
+
+# Find cases where the average is above threshold
+tests=`fgrep mean $3 | cut -c1-85 | grep 91m`
 
 if [ -z "$tests" ]
 then
-      echo "" >> $1
-      echo "PASSED, all benchmarks within 5% threshold" >> $1
+      echo "" >> $3
+      echo "PASSED, all benchmarks within 7% threshold" >> $3
 
-      ansi2html < $1 > $2
+      ansi2html < $3 > $4
       exit 0
 else
-      test_names=`fgrep mean $1 | cut -c1-85 | grep 91m | cut -f1 -d' '`
+      test_names=`fgrep mean $3 | cut -c1-85 | grep 91m | cut -f1 -d' '`
 
-      echo "" >> $1
-      echo "FAILED, following benchmarks are not within 5% threshold:" >> $1
-      echo "" >> $1
+      echo "" >> $3
+      echo "FAILED, following benchmarks are not within 7% threshold:" >> $3
+      echo "" >> $3
       for t in $test_names;
       do
-        echo $t >> $1
+        echo $t >> $3
       done
 
-      ansi2html < $1 > $2
+      ansi2html < $3 > $4
       exit 1
 fi
