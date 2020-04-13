@@ -86,3 +86,9 @@ build_script:
       ..
   - cmake --build . --target qmapboxgl -- -j %NUMBER_OF_PROCESSORS%
   - clcache -s
+  
+artifacts:
+  - path: build
+    name: build path
+    type: zip
+
